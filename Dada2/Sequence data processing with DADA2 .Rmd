@@ -1,0 +1,318 @@
+---
+title: "DADA2 for high throughput sequence data processing"
+subtitle: "Written by Gordon Custer 2018: Updated Fall 2020"
+output: html_notebook
+---
+
+Hopefully from reading the associated literature you know what makes DADA2 so interesting and revolutionary is the fact that DADA2 can learn errors in sequence data and correct these errors for indivdual sequences. This allows researchers to be sure that a sequence is in fact a unique biological variant versus a sequencing error. In addition to this novel error learning step, sequences are grouped into amplicon sequence variants (ASV) as opposed to being grouped at some level of similarity. 97% similarity was the norm prior to the development of DADA2 and other recent pipelines, like "Usearch". Grouping of taxa at a predefined level of similarity has the potential to mask the underlying structure of the data. By utilizing ASVs, we are able to know true abundances of individuals and avoid lumping of different taxa. These advances allow researchers to examine their data more thoroughly and uncover trends which may be masked at the classic 97% otu clustering.
+
+DADA2 offers a great tutorial for both ITS and 16S data. You should familiarize yourself with it, as much of this tutorial is borrowed from theirs. A link to this can be found under citation 3 at the bottom of this tutorial. 
+
+As mentioned before, DADA2 is both unique and a better option than some of the other bioinformatic pipelines due to the implementation of the DADA error learning algorithm. This algorithm infers whether or not individual base pairs are sequencing errors or true biological variantion. In the simplest terms, this is accomplished by pooling all samples and looking for matching sequences that occur across the entire experiment. If a sequence only occurs once throughout the entire experiment then the changes of it being a true biological variant are lower than if it were observed 10000 times. This "magic" happens in step 4 - "Infer sample composition". We will further examine this shortly. Another huge benefit to DADA2 is that it is all in R. Running a bioinformatic pipeline locally can be very demanding in terms of computing power. However, DADA2 is optimized to run on your computer and requires a relatively small amount of computing power. You have the option to run this pipeline on any system with R installed, this includes the Teton cluster. While a super comptuer is an option, I find it easier to work in R Studio which isn't available on Teton. 
+
+##Overview of the DADA2 workflow
+Below are the main steps for the processing of high throughput sequence data in DADA2. Each step has a more detailed section below and is accompanied by the necessary code. I highly recommend consulting the help pages for each function so you can further explore the options offered. Only in doing so will you know exactly what you are doing and be able to customize the pipeline to fit your needs. 
+
+1. Check for remaining primers
+2. Filter and Trim: fastqFilter() or fastqPairedFilter()
+3. Infer sample composition: dada()
+4. Merge paired reads: mergePairs()
+5. Dereplicate: derepFastq()
+6. Make sequence table: makeSequenceTable()
+7. Remove chimeras: isBimeraDenovo() or removeBimeraDenovo()
+
+The end product of the DADA2 bioinformatic pipeline is a "sequence variant table" (very similar to the classic operational taxonomic unit table or OTU table) and taxonomy table which can be imported into Phyloseq for further downstream analysis (in the next tutorials). These two pipelines merge seamlessly and provide researchers with a friendly transition. 
+
+Exercise 0: Copy the example dataset we will be working with from Teton to your Desktop; it is located in the following directory "DADA_Data_2020"; it is a large folder, so it may take a little bit to copy (~1.5GB). You can copy the whole directory by running the following command (line 27) in a local terminal window, with the only thing to change being the username lvandiep to your own username, everything else is the same. The rsync command is used instead of scp when you want to copy a whole directory from TETON to your own computer or vice versa.
+rsync -av lvandiep@teton.arcc.uwyo.edu:/project/microdiv-class/DADA_Data_2020 ~/Desktop
+After we are done today, you can delete this 'DADA_Data_2020' folder, so it doesn't take up the space on your computer!
+
+###Load the environment 
+In the Environment pane (top right), click the 'open folder" symbol and find the file named "DADA2_STUDENT_ENV.RData" in the DADA_Data_2020 folder you just copied to your Desktop from Teton in exercise 0 above. Wait until the loading of the files is done before continuing.
+
+##Getting started; Exploring the data
+Dada2 assumes the following has been addressed prior to starting the workflow:
+
+1. Samples have been demultiplexed. This means that the reads have been split into individual .fastq files. The sequencing facility often does this for you. If your samples have not been demultiplexed, commands such as split_libraries_fastq.py > split_sequence_file_on_sample_ids.py exist and can do the heavy lifting for you. These exist in QIIME (another bioinformatics pipeline). If you need to use these commands the QIIME help pages are extremely useful. Look at the data folder containing your sequences you downloaded in exercise 0. Have they been separated; i.e. does each sequence file have a sample name, e.g. CH1_3_19, CLEX2_1_19, etc.? 
+
+2. Non-biological nucleotides have been removed. This means primers, adapters, linkers, etc. have been removed from the reads, leaving us with the biologically relevant portion. Programs such as "trimmomatic" can be used for this. In many cases this step has been done or you, and in our case, we have done this for you for our dataset.   
+
+3. And finally, if we are working with paired end data, the forward and reverse files contain matching reads. That is if "sample 1" has a forward read file it must also have a reverse reads file. Look in your data folder to make sure each forward read has its reverse complement; check a few of the samples to see if there is a file named for that sample with R1 (forward read) in the name as well as a file with R2 (reverse read) in the name. We'll check this as well later on using a script in line 79-80.
+
+After we have confirmed that our reads satisfy the three prerequisites, we can proceed with the DADA2 pipeline for processing samples. 
+
+##Setting up your session
+OK first let's make sure to install DADA2, and that our installation of DADA2 was successful and check which version of the package we have installed. 
+
+Exercise 1: Download and load the DADA2 and ShortRead packages by running the chunk below in lines 57-63.
+#NOTE: when the download starts, enlarge your console (the bottom left pane), as it will ask the following:
+Update all/some/none? [a/s/n]: 
+type a followed by enter to continue the installation. 
+#Then another question may appear in some cases:
+Do you want to install from sources the package which needs compilation? (Yes/no/cancel) 
+type no followed by enter to continue the installation.
+
+You normally can install a package in a new chunk of code or in the console. If you do it in the console however, it will not be saved for next time you wish to load the package. I recommend loading packages in the top of your R script so its always there for you. 
+In your handout, copy the description of the DADA2 package from the help page. Next, we want to check which version of DADA2 we have installed, record which version you have installed in your handout. 
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("dada2", version = "3.11")
+library(dada2); packageVersion("dada2")
+library(ShortRead); packageVersion("ShortRead")
+```
+For future reference, the package version is important for other researchers who may want to duplicate our efforts. 
+
+###The DADA2 pipeline
+In the first step, we tell R where it can find your raw reads. You will need to change the directory to the folder containing the raw reads, which is in the  folder 'DADA_Data_2020' that you copied from TETON onto your Desktop in line 26-27. 
+
+Exercise 2: You will need to change your working directory to the folder containing your raw reads. Please do so and record this in your handout. The function list.files(path) will list all the files in that directory, which should be a total of 40 fastq.gz files, and 4 folders named cutadapt, filt1, filt2,filtN, as well as the environment "DADA2_STUDENT_ENV.RData" that you loaded just a minute ago.
+```{r}
+path <- "Path to your files" # CHANGE the text in between the "" to the directory containing the fastq files after unzipping. This should be on your Desktop/DADA_Data_2020. Remember that if you start with a forward slash / and then use the tab button on your keyboard you can walk through the directories.
+list.files(path)
+```
+
+This next section then splits the files into forward (R1) and reverse reads (R2).
+```{r}
+fnFs <- sort(list.files(path, pattern = "*_R1_001.fastq.gz", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern = "*_R2_001.fastq.gz", full.names = TRUE))
+#and the next line of code will tell you if the number of forward samples doesn’t match the number of reverse samples, if so, it will print “Forward and reverse files do not match.” If it doesn't print anything, you are good to go, meaning that all samples have one file with the forward reads and one file with the reverse reads.
+if(length(fnFs) != length(fnRs)) stop("Forward and reverse files do not match.")
+```
+
+In order to ensure non-biological nucleotides are removed, we have to specify the primer sequence we used in our PCR and library preparation. We have provided the sequences used in this project. For reference, the forward primer is the 515f and the reverse is the 806r. Run the code below:
+```{r}
+FWD <- "GTGYCAGCMGCCGCGGTAA" 
+REV <- "GGACTACNVGGGTWTCTAAT" 
+```
+
+This is a handy function written by the folks who developed DADA2 to allow researchers like us to quickly implement this check into our pipelines. It takes the primer sequences given above and creates forward and reverse complements. 
+```{r}
+allOrients <- function(primer) {
+    # Create all orientations of the input sequence
+    require(Biostrings)
+    dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+    orients <- c(Forward = dna, Complement = complement(dna), Reverse = reverse(dna), 
+        RevComp = reverseComplement(dna))
+    return(sapply(orients, toString))  # Convert back to character vector
+}
+FWD.orients <- allOrients(FWD)
+REV.orients <- allOrients(REV)
+FWD.orients
+```
+Next, we create a directory to store prefiltered reads. In this step, we filter reads to remove any basepair calls that were assigned to N. A basepair called "N" means the sequencing facility was unsure about the identity of this nucleotide to the point that they didn't even want to guess. DADA2 can not handle N basepairs. So, in order to move through the pipeline we remove all Ns early. 
+```{r}
+fnFs.filtN <- file.path(path, "filtN", basename(fnFs)) # Put N-filterd files in filtN/ subdirectory
+fnRs.filtN <- file.path(path, "filtN", basename(fnRs))
+#If you are running this script line by line: DO NOT run this next line of filterAndTrim, we've left the line in for future usage.
+#filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+```
+Next, count the number of times the primers are found in our prefiltered sequences. Only a few of the reverse complements are found. However, they will still need to be removed. 
+```{r}
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[1]]))
+```
+
+Then run the chunk below:
+```{r}
+path.cut <- file.path(path, "cutadapt")
+if(!dir.exists(path.cut)) dir.create(path.cut)
+fnFs.cut <- file.path(path.cut, basename(fnFs))
+fnRs.cut <- file.path(path.cut, basename(fnRs))
+```
+
+You will not have to run this next chunk (Lines 133-149) as it requires additional programs. However, we will give a brief explanation: in this section we are using the python program "cutadapt" to remove the primers we identified above. This will rewrite our sequences into a folder and we will use these cleaned sequences for the remainder of these tutorials.
+
+```{#r}
+cutadapt <- "/Users/gordoncuster/miniconda2/envs/qiime2-2018.11/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
+system2(cutadapt, args = "--version") # Run shell commands from R
+
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+# Trim FWD and the reverse-complement of REV off of R1 (forward reads)
+R1.flags <- paste("-g", FWD, "-a", REV.RC) 
+# Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
+R2.flags <- paste("-G", REV, "-A", FWD.RC) 
+# Run Cutadapt
+for(i in seq_along(fnFs)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-o", fnFs.cut[i], "-p", fnRs.cut[i], # output files
+                             fnFs.filtN[i], fnRs.filtN[i])) # input files
+}
+```
+Finally, as a sanity check, we want to make sure our cutadapt did the job and we no longer have primers in our sequence reads. This is the same function as above but we are telling it to check the cleaned sequence reads. We should expect all 0s, meaning there are no primers left. 
+```{r}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[1]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
+```
+Now we can specify the sample names from the names of our files. This section finds the reads in our cleaned sequence folder and then pulls the pertinent information out using a regular expression. Regular expressions are quite useful but can be difficult to understand. 
+```{r}
+# Forward and reverse fastq filenames have the format:
+cutFs <- sort(list.files(path.cut, pattern = "*R1_001.fastq.gz", full.names = TRUE))
+cutRs <- sort(list.files(path.cut, pattern = "*R2_001.fastq.gz", full.names = TRUE))
+
+# Extract sample names with assumption that sample names are contained in the first two underscores, e.g. CH1_1 or CLEX2_3. This sub expression can be changed but currently reads: take the string contained in the base name. from that string look for any character any number of times until you hit "_", then any character any number of times again until you hit another "_". Same these characters and discared the rest. 
+get.sample.name<-function(fname) sub("(.*_.*?)_.*", "\\1", basename(fname))
+sample.names <- unname(sapply(cutFs, get.sample.name))
+#This last line of code will print all the sample names of your files, which should be 20 in total
+sample.names
+```
+
+Next, we move to step 2 - "Filtering and Trimming". 
+
+Next, we want to remove reads that do not meet a certain quality threshold. The quality threshold represents how sure we are that the basepair is actually the basepair it was assigned by the sequencing facility. In order to do so, the first step is to visually inspect the read profiles. This plot shows the average quality score at each base pair across our reads. The most common metric used is known as a phred score. Wikipedia has a good explanation of phred score. I encourage you to take 5 minutes to read that page.
+
+You should examine your quality plots prior to setting the truncLen=c(,) argument in the filterAndTrim() function (next step). This will need to be specific for your analysis. I find it sufficient to view 5 or so of your quality proflies. Do this for both forward and reverse reads. Notice the square brackets in the code below? This is what you used to pull out columns in one of the earlier R labs. Again, the square brackets are being used to pull out the first 5 items of a list.
+
+Exercise 3: View your quality plots. I generally cut a read when the phred score falls below ~20. Where would you cut your forward reads and where would you cut your reverse reads? Record your answer in your handout. You can make the plots larger by running the two lines of code directly in the console (bottom left pane), or by clicking the "Show in New Window" button in the printout of the figures below this chunk (top left pane).
+```{r}
+plotQualityProfile(cutFs[1:5])
+plotQualityProfile(cutRs[1:5])
+```
+
+Note: While bacterial (16S) reads are typically the same length +/- a few base pairs, Fungal ITS reads can greatly vary in length. Sometimes the difference can be 300 bp over the entire ITS operon. When processing ITS reads it is best to remove the trunclen() option. Leaving it will remove any reads which do not meet the minimum length specified and will result in many reads being rejected even if they are of good quality. Instead of using a minimum length we recomend filtering reads based on quality. We will delve further into this shortly. 
+
+From the plots, none of the sequences look bad. Even the quality at the ends of the reads looks pretty decent. A quality score above 20 is considered really good. 
+
+Next, we create a new folder to store the filtered reads we will create in our next filtering step. 
+```{r}
+filtFs <- file.path(path.cut, "filtered", basename(cutFs))
+filtRs <- file.path(path.cut, "filtered", basename(cutRs))
+```
+
+Ok now for the good stuff. This is the first step we have encountered in the DADA2 pipeline that has many options for customization and as such, the first step which requires you to fully understand what the options mean and to implement them. It is possible to trim reads to a certain length. The parameters "trimLeft = 10, trimRight = 20," allow us to trim the forward and reverse reads seperately. In addition to cutting your reads at a set length you can also use a minimum quality score to remove poor basepairs.
+
+Exercise 4: View the help page for the filterAndTrim() function in the bottom right pane. Explore the available options and customize your filtering step to accurately and effectively trim and filter your sequence data based on the plots you viewed earlier. What do the maxN and truncQ options do? Look at the truncLen() option. DO NOT RUN THIS NEXT CODE! (Lines 195-200)  This chunk will take a long time to run. We have provided you the output so you can continue in the tutorial.
+```{#r}
+
+out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, trimLeft = , trimRight = ,  truncQ = 10, minLen = 50, maxN = 0, maxEE = c(2, 2),
+                     rm.phix = TRUE, compress = TRUE, multithread = TRUE) 
+head(out)
+```
+
+If you were to look at the track.filt object; it will contain two columns. This is used to keep track of the number of reads remaining after each step. You will always want to keep track of your reads through processing. If you are too stringent with one of your parameters too many of your reads could be discarded. On the other hand, if you are not stringent enough erroneous sequences could be included in downstream analysis. Further down in this script there is a chunk of code which tracks all the remaining reads through the workflow, so you don't need to do anything here yet. 
+
+Here is where some of the "DADA2 magic" happens (code in lines 208-214 below). The learnErrors() step uses machine learning to uncover the true underlying proportion of errors. This is accomplished by alternating the estimation of the error rate and the inference of the sample composition until they converge. Look at the help page and see what the authors have to say about this step. 
+
+###In this section, we are using the filtered files produced the previous step. You will not need to run this section as it takes a considerable ammount of time. We have provided the output for you. 
+
+```{#r}
+set.seed(100)
+errF <- learnErrors(filtFs, multithread = TRUE)
+errR <- learnErrors(filtRs, multithread = TRUE)
+plotErrors(errF, nominalQ = TRUE)
+plotErrors(effR, nominalQ = TRUE)
+```
+
+These next three steps (code below in lines 220-231) dereplicate sequence reads (e.g. remove duplicates), learn the errors (dada step), merge forward and reverse sequences into a single read, and keeps track of the abundance of each read. These are the the meat of sequence analysis. They take your unpaired and duplicated reads and turn them into something we can work with. First, the dereplication step helps to reduce computing time; in that it removes duplicate sequences (derepFs, derepRs), greatly reducing the size of the data set. The dada() step infers the number of truly unique sequences present in the data set. This, along with the learnErrors() step, is the most important and unique step of the DADA2 pipeline. 
+###Again, you will not need to run the code for this as it takes a long time. We have provided the output from this section for you. 
+If you were to work with only forward or only reverse reads then you could only infer so much; this includes taxonomic identity. Think of it like this. If you compared the first 5 numbers in the serial number of a one dollar bill printed in the same day there is a fairly good chance that they are the same. However, we all know that no two dollar bills have the exact same serial number. If you wanted to "know" (I put know in quotations because I really mean have proof) that these two bills were different you could look at the entire serial number. This is also true for sequence reads. If you had two closely related species, then you will want as long of a stretch of DNA as possible to determine the differences between the individuals. In merging the forward and reverse sequences, we are effectively allowing researchers to see the "whole serial number" or the longest possible stretch of DNA. 
+
+```{#r}
+derepFs <- derepFastq(filtFs, verbose = TRUE)
+derepRs <- derepFastq(filtRs, verbose = TRUE)
+# Name the derep-class objects by the sample names
+names(derepFs) <- sample.names
+names(derepRs) <- sample.names
+
+dadaFs <- dada(derepFs, err = errF, multithread = TRUE)
+dadaRs <- dada(derepRs, err = errR, multithread = TRUE)
+
+mergers <- mergePairs(dadaFs, derepFs, dadaRs, derepRs, verbose=TRUE)
+```
+
+For the next step, we take the merged reads from above and move the data into a sequence table. This is the classic format for storing processed HTS data. A sequence variant table is compact and contains the information necessary for further analysis. No matter which pipeline you use, you will come to a step such as this. Other pipeliness call this table an OTU table because instead of sequence variants, they use OTUs grouped at some level of sequence similarity. The final product is the same, a table consisting of sequence counts by sites. 
+```{r}
+seqtab <- makeSequenceTable(mergers)
+# the dim function will return the columns and rows of the object you are interested in. In our case, these dimensions are the number of samples (first number) and the number of taxa (second number) we have in our dataset. 
+dim(seqtab)
+```
+
+Exercise 5: how many samples and how many taxa are in your OTU table you created with the code above? Add your answer to the handout.
+
+What is a chimera? A chimera is a mythological Greek creature which is part lion, part goat, part serpent and is capable of breathing fire... What does that have to do with sequence data? Well, in the PCR step performed prior to sequencing, amplicons are sometimes halted in the middle of an elongation cycle. If this is the case, at the beginning of the next cycle a different sequence may become attached and elongated. Therefor, a chimera comes into existence. A chimera (in the HTS sense) is a sequence made up of parts to two parent sequences. The sequence does not represent a biological variant and as such should be removed from the data set prior to downstream analysis.
+```{r}
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+```
+
+Once you have built the Sequence tab and removed chimeras, let's take a look at it. This data table could be huge so let's use the skills we learned to view only the first 5 columns of our Pima dataset. Remember (Pima[,1:5])?
+
+Exercise 6: View the first 5 columns of your sequence table with chimeras removed (seqtab.nochim). Copy the code you use into your handout. You will see that the column heading is the actual sequence of that OTU, and the rows underneath it show how many reads belonged to that OTU for each sample.
+
+As mentioned above, it is VERY important to track the number of reads retained after each step throughout the pipeline. This chunk of code below allows you to track the number of reads. There is no magic number or percentage of reads retained and you will want to address this on a data set by data set basis. Consider your end goal prior to choosing the desired number of retained sequences. Can you think of an example when you would want to be very stringent with the reads retained? What about an example of when you wouldn't care quite as much?
+
+The number of reads retained is is a great example of data you might want to save in a separate excel workbook.
+Run the chunk below:
+```{r}
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, 
+    getN), rowSums(seqtab.nochim))
+# If processing a single sample, remove the sapply calls: e.g. replace
+# sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", 
+    "nonchim")
+rownames(track) <- sample.names
+head(track)
+```
+
+Exercise 7: Record the number of sequences retained through the entire pipline in your handout. Hint use the function colSums().
+
+Now that we have our sequence table and have seen that each column is headed by the sequence that represents that variant, we want to assign taxonomy. Assigning taxonomy is extremely useful when trying to interpret what is happening in the biological sense. In this step, we tell the assignTaxonomy() function several things. The first, which sequence table to use. We want it to use the table with no chimeras as this is our best "guess" at the true underlying proportions of microbes. Second, we tell the function where to find the database. Many different databases exist so you will want to figure out which one best suits your needs. Information on available databases can be found at https://benjjneb.github.io/dada2/training.html. 
+
+Exercise 8: You will want to download the Silva 138 database (silva_nr99_v138_train_set.fa.gz) from the dada2 website listed above and move it to your DADA_Data_2020 Desktop folder. Then change the pathway in the function to the correct folder. Finally, the minBoot argument specifies the minimum bootstrapping support required for taxonomic classification. Higher minboot levels increase confidence in the taxonomic assignment. Higher confidence levels are required when dealing with ITS reads than with bacteria. This is an artifact of the underlying structure of ITS reads vs. 16S reads. This should also be assigned on a per experiment basis. 
+```{r}
+silva.ref <- "/silva_nr99_v138_train_set.fa.gz"  # CHANGE ME to location on your machine
+```
+
+You will NOT need to run this next chunk of code as it take a while. We have provided the output from this section for you. 
+```{r}
+#taxa <- assignTaxonomy(seqtab.nochim, silva.ref, multithread = TRUE, tryRC = TRUE)
+```
+
+Exercise 9: View the first 10 rows of your taxonomy table (taxa). What families are represented? Record this in your handout along with the code you used to get this. Challenge: Can you use the unique() command to do this?  
+```{r}
+
+```
+
+Finally, some analyses may benefit from the inclusion of a phylogenetic tree. While this option is available you should question whether or not you actually want to use it. In many cases, a tree of the entire data set is not interpretable and provides little or no usable information. It may be best to subset your data set to only include a subset of taxa prior to building your tree. This is extremely computationally intensive and as such, can take many hours or even days to build. This is true even if it is done on TETON (partially because this function does not support parallel processing). I recommend reading the help pages for these functions but not actually running it unless absolutely necessary. 
+
+```{#r}
+library(DECIPHER)
+seqs <- getSequences(seqtabNoC)
+names(seqs) <- seqs # This propagates to the tip labels of the tree
+alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA,verbose=FALSE)
+
+phangAlign <- phyDat(as(alignment, "matrix"), type="DNA")
+dm <- dist.ml(phangAlign)
+treeNJ <- NJ(dm) # Note, tip order != sequence order
+fit = pml(treeNJ, data=phangAlign)
+fitGTR <- update(fit, k=4, inv=0.2)
+fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+        rearrangement = "stochastic", control = pml.control(trace = 0))
+detach("package:phangorn", unload=TRUE)
+```
+
+In the end, we have filtered and trimmed our data, learned errors, removed and or fixed non-biologically relevant variants, removed chimeras, created a sequence variant table, and assigned taxonomy. We now have all the necessary pieces for downstream analysis. The next tutorial utilizes the packages Phyloseq and Vegan for downstream analysis of our data. 
+
+Exercise 10: Install the phyloseq package. You may have to search google for instructions.
+```{r}
+
+```
+
+###Make sure you save your environment for future work. 
+You would not want to have to re-run this entire pipeline everytime you wished to examine your data. Save your environment as "YOURNAME_ECOL5540_DADA2_ENV" on your Desktop outside of the DADA_Data_2020 folder. You will need this for the Phyloseq tutorials that we will do next week. 
+Delete the "DADA_Data_2020" data folder if needed, so it doesn't take up the space on your computer.  
+
+Citations and Resources:
+1: https://www.r-project.org/ 
+2: https://benjjneb.github.io/dada2/index.html
+3. https://benjjneb.github.io/dada2/tutorial.html
