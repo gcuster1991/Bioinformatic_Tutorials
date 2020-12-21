@@ -1,0 +1,390 @@
+---
+title: "Introduction to Phyloseq"
+subtitle: "Written by Gordon Custer 2018: Updated Fall 2020"
+output: html_notebook
+---
+####IMPORTANT: If you stop before you get to the end of the tutorial, do the following before you close the file:
+1) Make sure you save your environment for future work (Go to Environment tab in upper right pane) and click on the  "save" symbol, and save it as LastName_phyloseq_Env2. 
+2) Then save your .Rmd file with all the updated information and code by clicking the "save" symbol in this pane.
+
+#Introduction
+The R package "Phyloseq" was developed by Paul McMurdie and Susan Holmes in 2013 and is essentially a wrapper of many commonly used functions for microbial analysis, visualization and storage of microbial data. This means Phyloseq pulls from many different packages and functions. What phyloseq lacks in flexibility, it makes up for in ease of use. This package provides many pre-programmed functions to assist in the analysis of microbial HTS data. However, the major downfall of Phyloseq is the inability to drastically alter many of the functions. For now we will not worry about that. Unless you want an extremely specific analysis, chances are Phyloseq has a function for you.
+
+Phyloseq requires your data to be in the form of a "Phyloseq Object". This object should contain at the minimum, taxonomy, sample data, and your ASV table. In addition to these three required components, the phyloseq object can contain a phylogenetic tree. 
+
+In order to carry out downstream analysis, let's put our phyloseq object together. You will need the following to be in your environment:
+1. ASV table produced by DADA2
+2. Taxonomy table produced by DADA2
+3. Sample Data produced during the Intro to R tutorial
+4. *OPTIONAL Phylogentic tree produced by DADA2
+
+The R Environment from the DADA2 tutorial from last lab should contain the necessary pieces mentioned in number 1 and 2 above. We will have to load the metadata sheet from WyoCourses separately. Go to WyoCourses and download the file "Metadata.csv" in the week 9 module "Lab Materials", and save it in your course folder on the Desktop. Do you remember the correct piece of code for reading in a .csv file? If not, try Google or go back to the introduction to R tutorial!
+
+Exercise 1: Load your environment you saved at the end of the DADA2 tutorial ("YOURNAME_ECOL5540_DADA2_ENV.RDATA") and then read in "Metadata.csv". Make sure to assign the name "metadata" when you load the file.  Record your code in your handout. NOTE: you my have to reset you working directory, or use the full path to the directory where the Metadata file is located. After you loaded the metadata file, run the chunk below to get the column headings, and follow instructions if a fix is needed.
+
+```{r}
+#look at the names associated with your metadata file. If your column is named "SampleID", you are fine. If it is named something else like "ï..SampleID" we can quickly rename it.
+
+names(metadata)
+
+#only run this next two lines if your SampleID column is named "ï..SampleID"
+
+#metadata$SampleID <- metadata$ï..SampleID
+
+#metadata$ï..SampleID = NULL
+```
+
+In this section we make sure we have the correct data available in our environment. We will also make sure all the data is in the correct form prior to assignment to the Phyloseq object. From here-on the terms Phyloseq object and ps are used interchangeably. After this section, you will have a Phyloseq object which allows for easy data manipulation and visualization.
+
+In order to use the functions provided by the phyloseq package, we need to load the Phyloseq package that you downloaded at the end of the DADA2 tutorial. Google "Phyloseq load" for instructions. If you loaded the package at the end of the DADA2 tutorial you could recycle that code and save yourself from rewriting it.
+
+Exercise 2: Load Phyloseq package and record how you did so in the handout. 
+
+Once your metadata file and Phyloseq package are loaded, we want to create rownames in our metadata. We do this so all the pieces of the Phyloseq object can be sure to match. To do so we can use the function rownames(). This is the first time you have seen a function on the left side of the "<-" operator. The lines of code below pull out the "SampleID" column and assign those values as row names. On the next line we remove the "SampleID" column from the data frame. However, since we named the row names we retain this data. Run the code below.
+```{r}
+rownames(metadata)<-metadata$SampleID
+metadata$SampleID=NULL
+```
+
+Look at the otu_table(), sample_data(), and tax_table() help pages and see what they do. Then run the code below. 
+```{r}
+my_otu_table <- otu_table(seqtab.nochim, taxa_are_rows = FALSE)
+#What does this taxa_are_rows arugument do?
+sampledata <- sample_data(metadata)
+my_tax_tab <- tax_table(taxa)
+```
+Next, we create our Phyloseq object by running the code below. As mentioned above, to run analysis in Phyloseq, all the data needs to become a phyloseq object.
+
+```{r}
+ps<-phyloseq(my_otu_table, sampledata, my_tax_tab)
+```
+Exercise 3: Look at your Phyloseq object (NOTE: your phyloseq object is now named ps). What does it contain. What type of summary info is available from your Phyloseq object? Record a summary of your ps object in your handout. 
+
+When working with 16S sequences, it is good practice to remove any reads that did not assign to the kingdom Bacteria (or Fungi if you are working with ITS). The primers we use may bind to regions in the genomes of Archaea or other non-targeted organisms, and when this happens they are included in the final ASV table. While this may not always be a bad thing, as we might want to know how Archea respond to an environmental stimuli, in this case, we are only concerned with the response of Bacteria for our exercise. Therefore, we want to exclude all non-Bacterial reads. Phyloseq offers several functions which are used to remove a sample or organism from your Phyloseq object based on some criteria. The first command we will use is the subset_taxa command. This command allows you, as a researcher, to remove certain taxa based upon taxonomic assignment. In this case we will want to remove all taxa which did not assign to the kingdom bacteria. To do this we only include taxa which assigned to bacteria in our new Phyloseq object. Run the code below.
+```{r}
+ps_bac<-subset_taxa(ps, Kingdom == "Bacteria")
+```
+Exercise 4: Record how many taxa did not assign to the kingdom Bacteria. You can do this by looking at the total number of taxa in the original ps object (which includes everything (ps)) and the ps object (ps_bac) after you run the previous section removing any non-Bacterial taxa. This is the type of information you would want to record in your excel workbook from the DADA2 tutorial. You might be asked by a reviewer or collaborator how many taxa were non-Bacterial, and since you have it recorded you can tell them quickly. 
+
+Exercise 5: Make another Phyloseq object named ps_firm which only includes taxa assigned to the phylum Firmicutes. Make a third Phyloseq object (named ps_not_firm) that includes every member that did not assign to Firmicutes. Hint: "!" is a symbol for "not". If "==" means all that equal, might "!=" mean not equal? Record your code in the handout, and how many taxa belong to the Firmicutes. 
+```{r}
+
+```
+
+Sometimes samples will not sequence as deeply as you would like. An example of this would be if all of your samples have 20,000 sequences and one only has 100. In order to avoid throwing away too many sequences in the process known as rarefication, we will examine our sequence depth for each sample and remove any which do not have enough reads. Keep in mind there is no magic number for 'not enough reads', and this should be assessed on a per project basis. 
+
+For those of you who are not familiar, the process of rarefaction occurs when all samples are given the same number of total reads. The idea is that in doing so samples can be directly compared to each other. Sequences which are very common will have higher probability of being chosen, and sequences with low abundance will have lower probability of being chosen. The idea is that in the end the same proportions of sequences will be represented. Can you think of why this might not be the case?
+
+In the code below we look at the number of reads per sample and remove any sample which may need to be removed prior to rarefying using the subset_samples() command. Read the help page for this command. This function allows you to select a subset of your samples based on sample ID instead of taxonomy. Run the code below; do you think we need to remove any samples based on the read counts?
+```{r}
+sort(rowSums(otu_table(ps_bac)))
+```
+There is only one sample below 10,000 reads. While this is not terrible we can remove it to practice; we could also keep it. I would say either way is fine. Keep in mind, you should be able to provide a justification for either way. 
+
+Exercise 6: Choose whether or not you want to remove the sample with <10,000 reads and provide a brief justification. Include this in your handout. Then we'll remove this sample for the sake of this practice tutorial, regardless of what you decided. 
+```{r}
+#This is the code to remove the single sample with < 10,000 reads. 
+ps_removed <-subset_samples(ps_bac, sample_names(ps_bac) != "CLEX1_4")
+```
+Now we can rarefy by running the code below. Keep in mind when you rarefy you likely lose rare taxa. How many taxa did you lose? The rngseed argument sets the starting point for rarefaction so it is reproducible. Search Google for "setting the seed" for a deeper explanation. 
+```{r}
+ps_rarefy <- rarefy_even_depth(ps_removed, rngseed = 15)
+sort(rowSums(otu_table(pp_rarefy)))
+```
+Did you get an error? Can you troubleshoot this code to find out what is wrong? Rerun code after you correct the line.
+
+As mentioned, the problem with rarefaction is that the process can cause rare taxa to be left out of the final ps object entirely. In addition, the process forces us to 'throw away' data. In many cases, a sample could have 100k reads but by rarefying to an even depth we may be throwing out 90k of them. In theory, rarefaction keeps the proportions of sequences the same, though it does not come without costs. A suitable alternative is to standardize within a sample. This method sums the number of reads within each sample, then divides each taxa by the total reads in that sample to give us a proportion of the total reads accounted for by that taxa within that sample. For more info: see Hugerth and Anderson 2017 paper section "Unequal Sample Sizes and Data Normalization".
+
+Standardization or transformation is performed on the original Phyloseq object (ps) not the rarefied one; using the rarefied ps object would defeat the purpose as many reads would have already been thrown away. Run the code below.
+
+```{r}
+ps_transformed <- transform_sample_counts(ps_bac, function(x) x / sum(x) )
+sort(rowSums(otu_table(ps_transformed)))
+
+#this next line subsets any taxa which have a mean abundnace of less than 1E-5. We may want to avoid this if we are concered about rare taxa. 
+ps_transformed <- filter_taxa(ps_transformed, function(x) mean(x) > 1e-5, TRUE)
+```
+Exercise 7: Examine the rarefied ps object and the transformed ps object. What do you notice about the otu tables? Record your observations in the handout. You can access the otu table by using the @ symbol. Try "ps_transformed@otu_table[, 1:10]". This will print the first ten columns to your screen.
+
+Now that you have prepped your data and have two different Phyloseq objects, one transformed and one rarefied, you are ready to start with analysis and subsequent interpretation. One of the most common methods for assessing the impact of a treatment is to compare diversity metrics. For this we will look at alpha and beta diversity metrics. What is alpha diversity? We talked about this in class! If you can not remember, Google it and find out. I know Wikipedia has a good explanation!
+
+Exercise 8: What is alpha diversity? How does it compare to beta diversity and gamma diversity? Include a short explanation in your lab handout.
+
+Phyloseq offers several functions that facilitate comparisons of alpha diversity metrics. The first one we will look at is estimate_richness(). This function returns a data frame with multiple alpha diversity metrics. While by itself, the data frame does not tell us much (as its hard to interpret in data frame form). We can summarize the data and run statistical tests on this data frame to determine what type of effect our treatment has on alpha diversity. The richness functions in Phyloseq does not accept transformed data and as such you must use the rarefied Phyloseq object when running these functions. 
+
+Exercise 9: Finish this line of code by using the help page. Remember to use the rarefied data! Run the code and record the code in your lab handout. 
+```{r}
+Richness_full<-estimate_richness()
+```
+
+Examine the Richness_full data frame you just created, and make a mental note of what you see. Can you make inferences based on an entire data frame or does it prove to be too cluttered? 
+
+Exercise 10: Now let's use the same methods we used in the "Intro to R" tutorial using the command substr() to extract information from the sample names and include it as metadata as an additional column in the richness_full data frame we just created. You will want to make a new column that contains the grazing treatments. Since the first two characters are sufficient to tell the two treatments apart, you can extract just those. 
+NOTE: this time the column that you are using to extract the information from is the rowname (this is indicated in the code by the (rownames(NameOfDataframe)). Remember the "$" operator for a single column. This might be helpful when naming a new column. Replace the following items in the code below with the correct code: NewColumnName, NameOfDataframe, X, Y, and copy the final code into the lab handout.
+```{r}
+Richness_full$NewColumnName <- substr(rownames(NameOfDataframe), start=X, stop =Y)
+```
+
+Like I mentioned above, it is very difficult to make sense of a data table full of numbers. One way of approaching this problem is to run a statistical test such as an ANOVA (analysis of variance) and a post-hoc differences test to determine whether or not alpha diversity metrics are different across treatment types. We covered this test and others like it in the "Intro_to_DataAnalysis" tutorial. 
+
+The "observed" metric is simply the number of unique OTUs observed within a sample; there are several more options for alpha diversity included in the data frame. What are some of them? Look up a few of the metrics and what they do. Again, Wikipedia is a good resource for this. 
+
+Exercise 11: Decide between an ANOVA and Tukey's HSD test or its non-parametric equivalent  (Kruskal-Walis) to compare the 'observed' alpha diversity metric among the grazing treatments. You can use the assumptions of ANOVA to guide your decision process. In your lab handout, detail which test you decided upon and whether or not you found any significant differences. 
+```{r}
+
+
+```
+
+Exercise 12: Run the same analysis for Shannon diversity and then choose one more diversity metric and do the same. What are the strengths and weaknesses of the three alpha diversity metrics you examined (observed, Shannon and your choice)? When would someone want to use Shannon diversity as opposed to richness? Record this in your handout. Were there significant differences (P<0.05)? 
+```{r}
+
+
+
+
+```
+
+In many cases you will want to save summary statistics associated with your data. Remember the excel workbook we had for saving important data? This would be a great example of data you should save for use at a later time. You can copy the output and paste it in your excel workbook. Another option is to save it to a .csv file directly from R. Hint the function is write.csv(). You can use the help page to decipher what you need to do to save a copy of your output. (Hint: You will have to save your output as an object in R first. Then you can save it as .csv)
+
+Next, the function describeBy() produces summary statistics and can take into account the various (e.g. summarizing by group). We may want to see how alpha diversity changes based on a factor or group of factors. We can use the "describeBy" function to quickly calculate summary statistics such as mean and standard deviation. 
+
+Exercise 13: Install the package "psych", and then load the package. Psych contains the describeBy() function and use this function to summarize the richness stats by treatment. You will want to run this function on the richness statistics you calculated for the full data set (Richness_full). Copy the code you used to install the package and calculate the summary statistics into your lab handout. 
+```{r}
+
+
+
+```
+
+NOTE: The output for the describeBy function will only make sense for numeric inputs. If you have a factor, it will assign numeric values to the factor and average the numbers. Keep this in mind whenever interpreting an output.
+
+Tip: you can use list() when trying to summarize by multiple factors, i.e. compare multiple groups at once. 
+
+Looking at a data frame of numbers can be extremely difficult, even impossible, to interpret. For our first attempt at producing a visual representation of the richness data we will use the plot_richness() function. This function runs the same analysis as above and plots the results. This will be our first chance to save a plot as well.
+
+NOTE: You may need to load the package "ggplot2" before starting with the graphing exercises.
+
+I think it good practice to save plots to objects. This way you can alter the plot by adding a single line of code instead of having to re-run the entire chunk. What I mean by this is instead of only running "plot_richness(ps_rarefy, "Treatment", measures=alpha_meas)", we add "p <-" to the beginning and this will save the product of "plot_richness(ps_rarefy, "Treatment" to an object named p. This object can then be altered without having to run all of the associated code. 
+
+Exercise 14: By using the help page examine the functions (plot_richness and geom_boxplot) below and alter it to create a plot which examines the richness measures you chose above and compares the different treatments. Edit the code below and create a graph with the same three metrics you examined above. Copy your codes to the handout.
+```{r}
+#First we create a vector with the desired alpha metrics. This allows us to only plot the ones we want to see. This works similar to the Intro to R tutorial when you selected columns based on their names.
+alpha_meas <- c("Observed", "", "")
+
+#alter the above line of code to include the 3 alpha diversity metrics you analyzed above, and on the next line finish the code; include the dataset you are using and what you are comparing.
+p <- plot_richness(, "", measures=alpha_meas)
+p <- p + geom_boxplot(data=p$data, aes(x=, y=value, color=NULL))
+p
+```
+
+If you run the chunk of code from above you will see the default ggplot box and whisker plot. Run the code below and look at the differences. Phyloseq is a ggplot (grammar of graphics) wrapper and allows programmers to use ggplot syntax for creating graphs. This allows you to greatly alter the plots; you can color code, change the transparency, the size of text and many, many more things as well all with relative ease. We will delve into the ggplot syntax later in this tutorial tutorial! For now, just appreciate how pretty the graph is after adding all of these aesthetics. 
+
+```{r}
+p <- p + ggtitle("Alpha diversity metrics by grazing treatments ") +xlab("Treatment") + ylab("Alpha Diversity Measure")+ theme(plot.title = element_text(size = 20, hjust=0.5))
+p <- p + theme(axis.title.x = element_text(size=15))
+p <- p + theme(axis.title.y = element_text(size=15))
+p <- p + theme(axis.text.x = element_text(angle = 45, hjust = 0.5))
+p
+```
+
+OK, now we want to save our plot. After you run the chunk of code above, you can type "p" in the console (bottom left pane). This will create your plot under the plots tab (bottom right pane). You can then click export and save as image. In the popup window you can change the aspect ratio of the image and select where you want to save this plot, and what to name it; make sure to name it something logical, e.g. Rplot_alphaDiversity. 
+
+Exercise 15: Save the alpha diversity plot, and insert it into your lab handout. 
+
+#STOPPING POINT FOR THIS WEEK 9 assignment 
+NOTE: we'll continue next week with the remainder of this tutorial to look at beta-diversity
+1) Make sure you save your environment for future work (Go to Environment tab in upper right pane) and click on the  "save" symbol, and save it as LastName_phyloseq_Env2. 
+2) Then save your .Rmd file with all the updated information and code by clicking the "save" symbol in this pane.
+
+#Week 10 starting point
+Start by performing the following 2 steps:
+1) Loading the following packages to be able to do the analyses below: phyloseq, ggplot2, psych.
+2) Load the environment that you saved at the end of the Week 9 tutorial (named something like vanDiepen_phyloseq_Env2.Rdata).
+
+As I mentioned earlier, you will want to avoid using rarefied data whenever possible. Now that we are finished with the richness metrics we can change our data back over to the transformed Phyloseq object. 
+
+Now we will use the transformed objects for the remainder of analyses. Notice we are renaming the ps transformed object to just ps. This way we don't have to change all the code below. Run this code
+```{r}
+ps<-ps_transformed
+```
+
+One of the most common means for visualizing a multivariate data set is to ordinate. Many different methods for ordination of data exist, some of which include principal component analysis, canonical correlation analysis, metric multidimensional scaling, and non-metric multidimensional scaling just to name a few. Choosing the right ordination technique is important and the choice is not an arbitrary one. This paper is great for helping you make the right choice. https://onlinelibrary.wiley.com/doi/full/10.1111/mec.13536. We will not address choosing a method in this class, but if multivariate statistics interest you there are offerings through the Statistics Department here at UW which are worth taking. For now, we will use non-metric multidimensional scaling (NMDS). The benefits of this analysis are that the test doesn't not assume normality in the data (normality is almost never observed in ecological count data. Do you know what we mean by normality?), it avoids the assumption of linear relationships in your data, and you can choose (nearly) any distance metric (discussed further in the next paragraph). For these reasons, NMDS is often the best choice for ecological data. However, don't trust me, always examine your choices before proceeding with an analysis!
+
+Another non-trivial choice you must make is which distance metric to use. Commonly students will confuse distance metrics with diversity metrics, such as Shannon diversity, or richness. However, they are not the same and are used to tell us very different things. Alpha diversity metrics can tell us how diverse a sample is and boils down to a single number. "The average Shannon diversity of the heavy grazed samples was X". Statistical distance on the other hand, much like the name implies, measures the distance between two objects in multivariate space. While this may seem arbitrary or even simple (maybe not!), the choice of which distance metric to use can be very complicated. Many distance metrics exist including: Bray-Curtis, euclidean, Manhattan, Jaccard, just to name a few. While they all essentially do the same thing, the intricacies of each metric are very different. In order to keep this simple we will only look at Bray-Curtis and Jaccard. In the most simple sense, Jaccard distance only accounts for presence or absence of a taxon. On the other hand, Bray-Curtis distance accounts for both presence and absence as well as the relative abundance of that taxon in a sample. Also take a look at the Hughert and Andersson paper we discussed in class to get more information about the various distance metrics, specifically the "Estimating community dissimilarities (Beta-diversity)" section. 
+Look at the help page for distance function within the phyloseq package to get an idea of the available options. 
+
+Exercise 16: What distance metrics are supported by the distance() function? What benefit would using Bray-Curtis over Jaccard provide?
+
+One of the biggest pro's of Phyloseq is the ease of implementation of complex statistical tests and tools. The ordinate() function offers 8 options for ordination methods and many distance metrics. Below we run the ordination and then plot it using the ggplot2 wrapper plot_ordination() function. Much like the plot_richness() function above we can customize our graph by changing and adding esthetics to our object (ord_plot). 
+
+```{r}
+ord <- ordinate(ps, method = "NMDS", distance = "bray")
+ord_plot<-plot_ordination(ps, ord, color="Treatment", shape = "Plot") 
+ord_plot <- ord_plot + theme_bw()
+ord_plot  
+```
+
+Exercise 17: Add a title to this graph and center it above the graph. Make the title descriptive. Use Google to find out how to do this. Try something like "Add title ggplot". Save the plot and put it in your handout. 
+Bonus: Can you color the points so high grazing is grey and no grazing is green?
+```{r}
+
+```
+
+Often, treatment will dramatically affect the microbial community composition of your samples (that is why we do many experiments, isn't it?). If the changes occur at higher taxonomic levels you may want to visualize this for publications or for your own need. Guess what?! Phyloseq offers a quick and easy function for plotting a bar graph of taxa abundances. Like all other functions the help page is extremely useful. 
+
+In this function below we do not iteratively add the parts of the graph like we have done before but instead, call them all at once. This does the exact same thing as the other graphs we made but keeps the code more compact. If a graph is computationally intensive this may not be the way to go. Note: These bar graphs of taxa abundances can be very messy if you are plotting the lower taxonomic levels and in most cases they are only useful for phylum or class levels (even then they are sometimes too cluttered to interpret). However, if you are working with samples that are not taxonomically diverse, as might be the case with the human oral cavity or something of the sort, you might be able to use this and make conclusions. You will need to run the name of the object you just created to actually see the plot,or copy the code to the console and run it there, resulting in the figure showing up in the bottom right pane in the plots tab.
+
+```{r}
+bar_graph_phylum_abundances <- plot_bar(ps_transformed, x= "Treatment", fill = "Phylum", title = "Phylum Abundances by Grazing Treatment") + theme(plot.title = element_text(hjust=0.5)) + geom_bar(aes(color=Phylum, fill=Phylum), stat="identity", position="stack") + theme(plot.title = element_text(hjust=0.5)) 
+```
+Exercise 18: Create the same graph but for class level instead, and save the plot and put a copy of it in your handout. 
+
+For some of you, the graph will show a total summed abundance of 10 on the y-axis, instead of the 1 that it should be. A total of 1 would reflect the sum of the relative abundances of each phylum (or class). However, due to some coding issue, if you have a 10 on the y-axis, this is the result of all the relative abundances of the phyla in all 10 replicates of each treatment. We tried to solve the coding issue, but were not able to do so at this point in time. 
+Phyloseq offers many of the most commonly utilized analyses in microbial ecology. The benefits of using a package such as this include the fact that help is not hard to find on the internet and the functions are pre-programmed which keeps you from having to come up with code from scratch. As you have seen this tutorial, you have a certain degree of flexibility from the programmed functions. However, some statistical tests like a mantel test or Adonis testing are not easily implemented in Phyloseq. To address this, these tests can be found in other packages such as vegan. In the next part of the tutorial we can look at some of the options offered by packages like vegan. 
+
+####NOTE: Save your working environment as "yourname_Phyloseq_env3" in your Desktop folder prior to going forward, be patient, it may take a minute. YOu can see if the environment has finished saving if the prompt in the console (bottom left pane), shows the regular > symbol.
+
+##Vegan 
+Exercise 19: Install and Load the vegan package, and record the code used in your lab handout. NOTE: click 'yes' when asked to restart R in the pop up window. Your Environment should load itself again, but if not, this is the reason we saved our environment in the NOTE above, just in case it wouldn't load by itself. Thus, if your environment is empty after installing vegan, load the "yourname_Phyloseq_env3" before continuing.
+```{r}
+
+```
+
+If you had the restart R after downloading vegan, make sure that the following packages phyloseq, ggplot2, psych, are loaded, if not, reload, otherwise it won't recognize some of the functions. Of course don't forget to load vegan.
+In this next section, we will pull out the important data from our Phyloseq object. We will then use base R and the vegan package to perform some analysis that are not usually carried out in Phyloseq. 
+
+First, we need to extract the pertinent information from your ps object. This has taken me a while to figure out. As such, we have provided it for you. What it comes down to is preserving the format. This can take a few minutes to extract the correct info; BE PATIENT. 
+```{r}
+ps_table <- data.frame(otu_table(ps_transformed))
+sd <- data.frame(sample_data(ps_transformed))
+```
+
+In the Vegan package we use the function metaMDS. Look at the help page for the metaMDS. The nice thing about using metaMDS in Vegan is that you have the ability to alter many of the arguments. Here we create a dissimilarity matrix of our ASV table to look at differences between samples. This step calculates the statistical distance between each sample (using the distance metrics discussed above). Essentially, it puts a value on how similar or different each sample is from each other, and we can then visualize this. 
+
+Exercise 20: Search "metaMDS"" in the help search bar. Within the help page titled "vegan::metaMDS"" look at the available options. What does the "k=" argument do? What about the "previous.best=T" argument? Provide a brief explanation in your lab handout. Then run the code below.
+```{r}
+ord<-metaMDS(ps_table, distance = "bray", k=3, trymax = 1000, previous.best = T)
+```
+
+Earlier in the Phyloseq portion of this tutorial, you were shown how to plot the ordination with the function plot_ordination() which utilizes ggplot. In the chunk below you will learn to plot your ordination using base R graphics. The function plot() is included in base R. You can use it to plot many different types of data (you used the base R plot function in the Intro to R tutorial to make your soil pH by depth graph). The nice thing about this plot() function is that it will interpret what type of graph is best suited for your data.
+
+Look at the plot made by plot(ord). Then look at the data made by plot(sd$pH). Notice the same function was used but the graphs are different based upon the structure of the input. This is one of the really cool features of base R graphics. 
+```{r}
+plot(ord)
+plot(sd$pH)
+```
+
+In this section we save the ordination plot as an object named fig1. 
+```{r}
+fig1<-ordiplot(ord, type = "points")
+fig1
+```
+
+Exercise 21: Look at the help page for the ordiplot() function. What does the "type=" argument mean? We have points as the type in this function. Re-run the function changing the type argument to one of the other options. Can you think of the advantages of having a figure with points instead of text? What about the other way around? Provide a brief answer in your lab handout. 
+
+Make sure to rerun the code in the last chunk (~line277) with type = "points", to get the fig 1 object in the correct format again. In order to beef up our plot we can try a couple different things. Much like the Phyloseq object has other objects contained within it, fig1 contains objects as well. To look at what fig1 contains use the "$". Remember the "$" was used to pull out specific data from an object. Press tab when your cursor is located after the "$" and R will provide the available options. 
+```{r}
+fig1$sites
+```
+
+The sites object gives the location of the sites in the ordination plot, and if you were to use "species" instead of "sites", the object tells you where each individual species would be located on the ordination plot. In this next chuck we pull the 'sites' data out and save it is a new variable. We are doing this so we can plot the locations and have slightly more control over the final plot. 
+```{r}
+NMDS1<-fig1$sites[,1]
+NMDS1
+NMDS2<-fig1$sites[,2]
+NMDS2
+```
+
+A useful feature of the Vegan package is the ability to plot environmental vectors and factors over an ordination. The projection of the vector in relation to the points in the ordination shows the correlation of those points with that environmental vector. These environmental variables can include thing such as pH, Moisture, organic matter or could even be enzyme activities, and they make inference and interpretation much easier.
+
+Below is code which produces a graph with environmental variables laid over the ordination plot. One important thing to note about using R markdown is that base R graphics must be ran together in the same chunk. If you were to split this up and try to make the plot you will get an error. Look up the various functions used in this code to understand better what you are doing by running this code.
+```{r}
+# you have to have matching samples to run this. 
+plot(NMDS1, NMDS2,cex=0.8, xlab='NMDS1', ylab='NMDS2')
+with(sd,ordiellipse(ord, Treatment, kind="se",conf=0.95))
+
+#Envfit is the function to add the listed variables as vectors to the plots, and p.max is used to plot only variables with a certain p-value.
+ord.fit <- envfit(ord~Treatment + pH + Moisture + EC + OM, data = sd,  perm = 1000, na.rm = TRUE)
+plot(ord.fit, p.max=0.05, col="black", cex=0.8)
+title(main = 'Bacterial Community', cex.main=2)
+```
+
+Next up is Adonis testing. Adonis testing is a permutation based MANOVA (lacks the assumptions of the normal multivariate ANOVA (MANOVA)). This test allows researchers to test for significance of treatments or uncontrolled covariates. The help page has a very good explanation of what the adonis() function does.
+
+Exercise 22: When you run the code below, if it ask if you want "updat loaded packages", click "NO". Look at the Adonis help page. What format does the data have to be in? Record this in your handout. What format does the parDist() function require? Do you understand you must convert the table to a data.matrix first then run the distance function? Copy the output from your adonis analysis to your lab handout. Were any of the variables significant?
+
+```{r}
+install.packages("parallelDist")
+library(parallelDist)
+# you must remove any samples with NAs prior to running this analysis
+sd_no_na<-na.omit(sd)
+ps_table_no_na<-ps_table[rownames(ps_table) %in% rownames(sd_no_na),]
+
+adonis_table<-data.matrix(ps_table_no_na)
+adonis_dist<-parDist(adonis_table, method = "bray")
+
+ord<-metaMDS(adonis_table, distance = "bray", k=3, trymax = 1000, previous.best = T)
+
+adonis(adonis_dist ~ Treatment + pH + Moisture + OM + EC, data = sd_no_na)
+```
+
+##Now its time for ggplot!!
+As was mentioned earlier in this tutorial, we are revisiting ggplot. The gg in ggplot stands for grammar of graphics, and this package was developed by Hadley Wickam in 2007 with the idea that plotting should be easy and understandable. Once you understand how the grammar of graphics works you can make any type of ggplot easily. Over the next few chunks of code we will produce a BEAUTIFUL ggplot graph and learn how to customize any ggplot figure. For this activity we will use the metadata data set and the cars data set (Do you remember this data set from the first tutorial?). We have already pulled the metadata out of our Phyloseq object and saved it as the object "sd". (see ~line 245)
+
+Exercise 23: View the "sd" object. Make sure it looks right. What is the pH of site CLEX1_5? Record this in your handout. 
+
+In this section we will create a box and whisker plot of the differences in pH among treatment groups. We will look at each aspect of the plot individually to familiarize you with each aspect. Let's get started.
+
+In this section, we introduce the standard ggplot function. "ggplot(, aes =)". This function is used all the time. ggplot() initializes a gg object. The first argument in the ggplot() function specifies the data frame, which is sd in our case. The next set of arguments, inside the aes argument, specify your x and y axes. In this case, we want our y-axis to be the "pH of treatment groups" and the x-axis to be "Treatment". 
+```{r}
+e<-ggplot(sd, aes(x=Treatment, y=pH, fill=Treatment))
+```
+Exercise 24: Look in the upper right pane in your environment tab to see what type of object "e" is? Using the "$" operator look at what is contained in the "e" object. Record some this in your handout. 
+
+Once we have initiated our gg object (if you type 'e' in your console, you will see an empty plot in the 'Plots' tab in the bottom right pane), we will need to specify what type of graph we want. ggplot supports many different types of graphs. In this case, we will use a box plot (also known as a box and whisker plot); other options include histograms, scatter plot and bar plots. 
+
+Exercise 25: Search Google for other options for ggplot based graphs. What would you use instead of geom_boxplot? Record at least two in your handout. 
+```{r}
+e1 <- e + geom_boxplot() 
+```
+If you again type 'e1' in your console, you will now see an box and whisker plot for pH in the 'Plots' tab in the bottom right pane.
+
+Now let's make your graph interpretable. All graphs have axis labels, a title and potentially some color coding based on sample type or treatment. "scale_fill_manual"" will allow you to fill your boxes with the colors of your choice. You have to specify the colors before you run the function though. See code below. 
+```{r}
+colorspalette<-c("gray", "forestgreen")
+e2 <- e1 + scale_fill_manual(values=colorspalette)
+```
+If you again type 'e2' in your console, you will now see an box and whisker plot with your specified colors for each treatment in the 'Plots' tab in the bottom right pane. As you may have noticed, every time we are adding something to the graph, we change the object name from e to e1, to e2, etc. This is so that we can go back to a previous format of the figure we are creating, in case we don't like what we added or change to the figure. Once you feel comfortable you can just use 'e' and overwrite it every time you are adding or changing something, but for the sake of the tutorial, we'll be using unique object names for every change we make.
+
+Next, let's make our graph have labels. After you add them, again, have a look at your graph by typing 'e3' in the console. Notice we added labels to the x, y and main together. You could add them individually if you wanted. The final product would be the same. 
+```{r}
+e3 <- e2 + xlab("Grazing treatment") + ylab("pH") + ggtitle("pH by Grazing Treatment")
+```
+Now we get to the fine scale customization. This is where you can add the "finishing touches" to a graph and make it really look good. The theme argument allows for many aspects of the gg object to be altered. Let's examine the code below and decipher what we are altering. In this section we use theme to alter the size of the axis text, the color of the background, and we remove the legend. Each aspect is altered individually. 
+
+Exercise 26: Save two graphs: One with the legend and one without. Include them in your handout. 
+```{r}
+e4 <- e3 + theme(axis.title.x=element_text(size=13), axis.text.x  = element_text(face="bold", size=9))
+e5 <- e4 + theme(plot.title = element_text(hjust = 0.5))
+e6 <- e5 + theme(axis.title.y=element_text(size=10)) 
+e7 <- e6 + theme(panel.background = element_rect(fill='white', colour='black'))
+#e8 <- e7 + theme(legend.position="none")
+```
+
+Finally, one might want to include text on the graph to indicate statistical (in)differences. To show this, we use letters above the bars. You can also use this function to add other text you may wish to include on your graph. Notice you have to specify where you want your text to appear. 
+
+Exercise 27: Alter the annotate() function below to have your letters at the same y coordinate above each bar. Include a copy of your graph in the lab handout. 
+```{r}
+e9 <- e7 + annotate("text", size= 4, label = c("a", "a"), x = c(1,2), y = c(200, 900))
+```
+
+To this point you have run through the basics of microbiome analysis. In the next "tutorial" you will be asked to implement some of the analyses you have done so far on a different data set. Remember one of the benefits to using R and Rnotebooks is that the code you have already written is always available. You can always revisit these notebooks if you forgot how to do something.
+
+##IMPORTANT: Before you close the file:
+1) Make sure you save your environment for future work (Go to Environment tab in upper right pane) and click on the  "save" symbol, and save it as LastName_phyloseq_Env4. 
+2) Then save your .Rmd file with all the updated information and code by clicking the "save" symbol in this pane.
+
+
+Citations and References:
+1. http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0061217
+2. https://www.bioconductor.org/packages/devel/bioc/vignettes/Phyloseq/inst/doc/Phyloseq-analysis.html
+3. https://ggplot2.tidyverse.org/ 
+
