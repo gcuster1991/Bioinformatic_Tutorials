@@ -1,0 +1,195 @@
+---
+title: "Introduction to Data Analysis in R"
+output: html_notebook
+---
+
+In this tutorial, you will work through some of the most common statistical analyses utilized in the world of microbial ecology. For these exercises, you will use the mtcars data set accessed through base R for the examples. The data was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models). You will then be asked to use the soil data from the Happy Grass Grazing experiment collected by last year's students for the some of the exercises, in which you will apply your new R data analysis knowledge. This data will allow you to get hands on experience with real field data and statistical testing.
+
+First, we will load the necessary packages. The packages you will need to load are "tidyverse", "stats", "car", and "mvnormtest". Since this is likely the first time you will be using many of these packages, you will need to install them first. Hint: install.packages() is the needed function.
+
+Exercise 1: Install and load the necessary packages for today's lab. Record the code you used in your lab 4 assignment document. 
+```{r}
+
+
+
+
+
+```
+Please access the mtcars data set and name it cars_data. You can call the data by running the first and second lines of code in this block. You will then need to rename it cars_data on your own. HINT: remember the "<-" operator. NOTE: you will know if you did this correctly; the final line of code will not run otherwise.
+The final line of code in this section uses the names() function to rename the column headings into something more descriptive. 
+
+Exercise 2: Rename the mtcars data set as "cars_data". Record the code you used in your lab 4 assignment document. Check to see if the columns were renamed.
+```{r}
+data(mtcars)
+print(mtcars)
+#rename the mtcars data set as cars_data by writing and running the correct code on the next line:
+
+# this last line will rename your column headings using the vector command c("","")
+names(cars_data) <- c("Miles_per_gallon", "Number_of_cylinders", "Displacement", "Horsepower", "Rear_axle_ratio", "Weight_in_1000_lbs", "Quarter_mile_time", "Engine_v_or_inline", "Transmission_M_or_A", "Number_forward_gears", "Number_of_carbs")
+```
+
+Exercise 3: Please read in the Happy Grass metadata file ("HappyGrassMetadata.csv") that you downloaded from WyoCourses. NOTE: think about where your file is located, and consider if you need to use the full path to the file or set your working directory.
+Save it as HG_Data and run the second line in this chunk. You will use this for the various exercises that follow each set of examples from the mtcar data analysis. Record the code you used in your lab 4 assignment document.
+```{r}
+
+
+HG_Data$Treatment<-as.factor(HG_Data$Treatment)
+```
+
+Now, let's look at the cars_data data frame using both the glimpse() and str() functions. What types of data are included in this data set? Though all variables are listed as numeric, the Number_of_cylinders, Engine_v_or_inline, and Transmission_M_or_A variables should be encoded as factors. It would be best to change all three of these to a factor now for subsequent analyses. 
+
+Exercise 4: Convert the Number_of_cylinders, Engine_v_or_inline, and Transmission_M_or_A columns to factors. The first one has been done for you. Take a moment to think about the difference between a categorical vs. continuous variables? Please include the code you used to accomplish this in your handout along with a brief explanation of the difference between categorical and continuous variables. 
+```{r}
+str(cars_data)
+glimpse(cars_data)
+cars_data$Number_of_cylinders<-as.factor(cars_data$Number_of_cylinders)
+
+
+
+```
+
+The summary() function is quite useful for quick summary statistics. If you run it on your data frame, it will print the mean, median and quantiles for your data. 
+```{r}
+summary(cars_data)
+```
+
+# Hypothesis testing
+This section provides some background information on hypothesis testing, which is the basis for much of statistical inference. So, given the observed data, how confident are you that the patterns you uncover are representative of the underlying population or could this pattern be observed by chance. In hypothesis testing, a researcher will set a minimum confidence requirement, called an alpha level, that must be met in order to reject the null hypothesis. Wait wait wait... what is the null hypothesis? The null hypothesis can be considered the default, or the most conservative option. In most cases, it is the treatment had no effect or groups have no difference. On the other hand, the alternative hypothesis can be accepted only when the null is rejected, e.g. your p-value falls below the alpha level you decided upon prior to analysis. If you reject the null hypothesis, you can conclude that there is a statistical difference between or among treatment groups. In order to reject a null hypothesis, you will have to find some level of support that the observed trends did not occur due to random chance. The most common level of support in ecology is 0.05. This means your p-value has to be equal to or below 0.05 in order to reject the null hypothesis. In this case, you are saying you are willing to accept a 5% chance that the differences observed came from random chance. In the medical field, p < 0.001 is often used because if we are practicing medicine we need to be very sure that the observed difference was not due to chance. 
+Please note, smaller p-values do not mean stronger relationship or larger difference, only that the chance of the observed difference being attributable to randomness is less probable. This p-value testing can be difficult to wrap your head around. If you are struggling please check out this series of videos from Kahn Academy: https://www.khanacademy.org/math/statistics-probability/significance-tests-one-sample 
+
+## Comparing two or more groups 
+One of the most commonly asked questions in science, "Is there a difference between these two groups?", can be addressed with the ANOVA (Analysis of variance) framework. As one of the most commonly utilized statistical tests, the ANOVA framework allows you to examine the variation among and between groups. Put another way, ANOVA allows a researcher to rigorously test whether there is a difference in the means of different groups, i.e. test whether there is a relationship between categorical and numeric variables. The test produces a p-value which can be used to determine whether the relationship is statisticaly significant or not. The most common types of ANOVA are the one-way ANOVA and the two-way ANOVA. With the one-way ANOVA, you test the relationship between the response and a single predictor. With the two-way ANOVA, you can test the relationship between a respone variable and two predictors simultaneously. 
+
+The ANOVA notation can be written as Response ~ predictor1 + predictor2 + interaction_term + error. In english, this would read "The response is a function of predictor 1 + predictor 2 + the interaction of predictor 1 and predictor 2 + error." When doing basic modeling in R, you will not need to assign the error term. Your functions will look more like this "Response ~ predictor1".
+
+NOTE: Statistical significance is not the same as biological significance! Do you know what is meant by this? This is something to keep in mind whenever you're examining a dataset.
+
+Implementing an ANOVA test is relativley straighforward. However, the ANOVA framework relies on several assumptions. The assumptions of a statistical test allow us to be sure that the results of our test are meaningful. You can think of the assumptions as a sort of checklist that you must fulfill before conducting the analysis. The four assumptions of ANOVA are listed below.
+
+Exercise 5: Please provide a brief explanation of each assumption of ANOVA in your lab 4 assignment document. 
+
+1. Independent observations
+2. Normality of residuals
+3. Equal variances between treatments
+4. Lack of multicolinearity -- in two-way (or more) ANOVA
+5. Linear relationship between predictor(s) and response
+
+As an example, let's walk through an ANOVA using the cars_data data set. We will look at Miles_per_gallon ~ Number_of_cylinders. Without having much knowledge about cars, one could expect to see a relationship between the number of cylinders and the gas milage of a car. However, without a rigorous statistical test we can't say that 4 cylinder cars have better or worse gas milage than 8 cylinder cars. In this example, we will walk through the steps associated with running an one-way ANOVA. 
+
+First, I always like to explore the data graphically. To do this, I like to visualize using boxplots or scatterplots and look for general trends. The first line of code produces a box and whisker plot (miles per gallon by number of cylinders). The second line of code produces a box and whisker plot of (miles per gallon by engine type). Both graphs appear to show a trend that we can explicitly test.
+
+```{r}
+plot(Miles_per_gallon ~ Number_of_cylinders, data=cars_data)
+plot(Miles_per_gallon ~ Engine_v_or_inline, data=cars_data)
+```
+
+Next, we will create and run our model. The term model may seem scary but in its simplest form it can mean anyway we want to understand our data. Since we only have one predictor, we don't have to worry about multicollinearity in this case. However, keep this assumption in mind if you have multiple predictors. Likewise, independence of observations is something you will have to assess yourself. In this case, there is not a test for independent observations. You will have to critically assess if the observations are independent of each other and go from there. 
+
+To start, we create the model Miles per gallon ~ Number of cylinders. With this notation, we are saying we think that the miles per gallon of a car is a function of the number of cylinders a car has. We then save the model as "mod" so it can be accessed later. After running the model take a look at the mod object using the summary() function. The summary () function, much like the plot function, infers what type of output will be best and instead of printing summary statistics, the summary() function prints relevant information about our ANOVA test. 
+
+```{r}
+mod <- aov(Miles_per_gallon ~ Number_of_cylinders, data = cars_data)
+summary(mod)
+```
+
+According to the ANOVA test output, it looks like there is a significant difference in miles per gallon among at least two of the different groups (4, 6 and 8 cylinders); significance code of *** indicating that P < 0.0001. However, we will want to be sure that the assumptions of the test are met so we can trust the output. In order to assess the normality of the residual error, we can use the residual function found in the stats package. This function extracts the residuals out of the mod object. Next, in a similar fashion to above, we can visualize the residuals. The hist() function plots a histogram of the residuals. As you can see from the plot, the distribution of the residuals looks to be normal-ish with a slight hump on the lower end of the distribution. In order to test this, we can use the Shaprio-Wilk test found in the stats package. This function performs the Shapiro-Wilk test of normality. A p-value lower than 0.05 would indicate the residual errors are not normally distributed and that we have violated one of the assumptions of the ANOVA framework.
+```{r}
+res<-residuals(mod)
+hist(res)
+shapiro.test(res)
+```
+
+As you can see from the histogram and Shapiro-Wilk test (P>0.5), the residual error of our model follows a normal distribution, meaning we can continue on to the next assumption. 
+
+In the next test, we will assess the variance associated with the different groups. This test is used to test for homogeneity of variance and is used to test that variances are equal for all sample groups. There are two different ways to assess homogeneity of variance (Bartlett test and Levene test). The Levene test is less sensitive to departures from normality. If your data is normally distributed, you can use the Bartlett test. If not, the Levene test provides an alternative.
+
+```{r}
+bartlett.test(cars_data$Miles_per_gallon, cars_data$Number_of_cylinders)
+
+leveneTest(cars_data$Miles_per_gallon, cars_data$Number_of_cylinders)
+```
+
+Uh oh, a p-value of 0.015 suggests that we have evidence that we do not have homogeneity of variance. When this assumption is violated, we have an increased probability of falsely rejecting the null hypothesis, i.e. we think we observed a difference when in fact there was none. One way around this is to transform our data. We can try to see what would happen if we log transform the data, though remember you will have to do this for the model as well. Below we have reprogrammed the model to run with the log transformed data, pulled out the residuals and tested them for normality, and finally checked for homogeneity of variance.
+
+```{r}
+mod_log <- aov(log(Miles_per_gallon) ~ Number_of_cylinders, data = cars_data)
+summary(mod_log)
+
+res_log<-residuals(mod_log)
+hist(res_log)
+shapiro.test(res_log)
+
+bartlett.test(log(cars_data$Miles_per_gallon), cars_data$Number_of_cylinders)
+```
+From our results, it looks like a log transformation of the response worked! We still detect a significant difference in miles per gallon ~ number of cylinders. But this time, we  meet the assumption of normally distributed error and homogeneous variance among groups! Using the ANOVA test, when the assumptions are met and we produce a p-value less than 0.05, tells us that we can reject the null (no difference) and accept the alternative hypothesis (there is a significant difference between at least two groups). But, how do we know which groups are statistically different from each other. To do this, we can utilize a post-hoc test like Tukey's Honest Significant Difference test (Tukey HSD). This test computes significance intervals for the true difference in means for each group, i.e. mean of group 1 - mean of group 2. If the difference and associated interval does not overlap with 0, we can be confident (to alpha of 0.05) that the groups are different. Below, you can see how the Tukey's HSD test is implemented.
+
+```{r}
+TukeyHSD(mod_log, "Number_of_cylinders")
+```
+Based upon the output of the Tukey's HSD test, we can say that all groups are statistically different from each other (p<0.05 for each pairwise comparison). In all cases, the confidence interval associated with the difference in means does not overlap 0.
+
+Ok, now you have seen and implemented an ANOVA and performed a pairwise comparison using parametric tests. However, what would you do if you can't make your data meet the assumptions through log transformations or other tricks? You're in luck! There are tests that do not rely on the same assumptions but allow you to test for a statistical relationship between the predictor and response. An example of which are the Kruskal-Wallis and Wilcoxon tests. The Wilcoxon test is used when there are only two groups. The Kruskall-Wallis test can be used when there are more than two groups. These tests are non-parametric alternatives to an ANOVA  They are recommended to be used when the assumptions of the ANOVA are not met. In this example we utilize a pairwise.wilcox.test to examine the differences in MPG among the cylinder groups from the cars_data dataset.  
+```{r}
+kruskal.test(cars_data$Miles_per_gallon, cars_data$Number_of_cylinders)
+```
+
+According to the Kruskall-wallis test, we see evidence to reject the null hypothesis and accept the alternative (Reject: no difference, accept: at least two groups are different from each other). This provides the same result we observed within the ANOVA framework above. Next, in a similar fashion, we will want to determine which groups are significantly different from each other. To do this, we can use the pariwise.wilcox.test() found in the stats package. This function calculates pairwise comparisons between group levels. The final argument "p.adjust.method" is used in situations where multiple comparisons are being made. The p-value is adjusted because when more comparisons are being made simultaneously, the probability of observing a false positive due to chance increases. With this in mind, we adjust the level of significance to account for this increased probability of observing a false positive.
+
+```{r}
+pairwise.wilcox.test(cars_data$Miles_per_gallon, cars_data$Number_of_cylinders,  p.adjust.method = "BH")
+```
+
+The output from the pairwise.wilcox.test() is slightly different from that of the ANOVA or summary() function. It prints as a table of the pairwise comparisons. Values less than 0.05 suggest significant differences between the two groups being compared. For example, see the top left corner of the table. This cell is a comparison of the mean miles per gallon in the 4 cylinder and 6 cylinder groups. At 0.001, the Benjamini & Hochberg corrected p-value is evidence that the two groups have a different mean miles per gallon.
+
+In this section of the tutorial, we have gone over two different methods to address the same question. "Are my groups different?" we have provided you a parametric method (ANOVA) and non-parametric method (Kruskal-Wallis) for situations where the assumptions of the ANOVA cannot be met. You may ask yourself, "Why would I ever use he parametric method when I can be sure the non-parametric method will work in all cases?". Well in general, parametric methods are more sensitive and have more power to detect group differences than their non-parametric counterparts. So, though you can be sure the non-parametric test is appropriate, you are sacrificing sensitivity and some of your ability to detect meaningful differences.
+
+Exercise 6: On your own, you are to compare 2 of the variables from the Happy Grass data file you read in for Exercise 3 above among the grazing treatment groups using a test of your choice and pairwise comparison. You will use the Happy Grass metadata as your data sheet. 
+One of the variables to compare among Treatments should be the one that you selected in the "Week 2 Soil sampling/analysis lab, Question 2", which you expected to be most affected by grazing. In your lab 4 assignment document, please provide the code and brief write up on your thought process as to why you chose the specific test and pairwise comparison that you did. In addition, please provide a brief write up that indicates what your statistical results mean in the context of the Happy Grass experiment. 
+
+```{r}
+
+
+
+
+
+
+
+
+
+
+
+
+
+```
+
+
+#Correlation testing
+Correlation testing is used to evaluate whether there is an association between two variables, i.e. as one variable changes so does the other in a predictable fashion. For example, as height increases of a person, so does weight usually. In statistics, a correlation coefficient is an assessment that measures both the association and direction of the tendency of the two variables to vary together. There are several different correlation coefficients that can be calculated, each being a better fit for different situations. For example, the Pearson correlation (r) measures a linear dependence between two variables (x and y). It’s also known as the parametric correlation test because it depends on the distribution of the data. It should be used when x and y follow a bivariate normal distribution. Though non-normality does not mean the Pearson correlation is worthless. Non-normality in the data suggests that the Pearson correlation coefficient may not entirely capture the relationship between the two variables. This is less of a concern with larger data sets. Regardless of the size of the data set, Pearson's correlation coefficient is susceptible to outliers. On the other hand, Kendall (tau) and Spearman (rho), which are rank-based correlation coefficients (non-parametric) that can be used when the data is not normally distributed or does not have a linear relationship with each other. They are both robust to outliers and they are rank based tests. Spearman correlation relies on the assumption that data are at least ordinal and share a monotonic relationship. Kendall's tau is considered an alternative to both when you have a small sample size and several tied values (i.e. very similar or the same values).
+
+As was the case with the ANOVA, I like to explore the data by plotting it first. Here we create a graph of Miles per gallon (MPG) vs. Horsepower (HP) using the plot function. Yet again, the plot function seems to know the best type of plot to display. 
+```{r}
+plot(Miles_per_gallon ~ Horsepower, data=cars_data)
+```
+ 
+From the graph, it looks like there is a linear trend of decreasing MPG as HP increases. However, towards the end, the line looks like it may flatten a bit. Next, let's calculate Pearson's correlation and Spearman's rank correlation to see if they tell the same story. 
+```{r}
+#Pearson gives us the linear relationship
+cor.test(cars_data$Miles_per_gallon, cars_data$Horsepower, method = "pearson")
+#Spearman gives us the monotonic relationship
+cor.test(cars_data$Miles_per_gallon, cars_data$Horsepower, method = "spearman")
+```
+From our results, we can see that both the Pearson's product-moment correlation and the Spearman's rank correlation suggest that MPG and HP are highly correlated. Pearson's product-moment correlation shows the linear relationship between the two variables to be -0.77. While the Spearman’s rank shows a slightly higher correlation of -0.89. Both show a significant negative correlation between the two variables, meaning that as one increases the other decreases. From these two correlation coefficients and knowing what they both are best suited for, we can conclude that a portion of the relationship is non-linear, though both suggest the same negative correlation.
+
+Exercise 7: Examine the correlation between two different sets of variables (e.g. set 1: variable 1 and variable 2,  set 2: variable 5 and variable 3) from the Happy Grass data set. In your lab 4 assignment document, record the pair examined, the direction and strength of correlation, which test you used and why you chose this specfic correlation coefficient. 
+```{r}
+
+
+
+
+
+
+
+
+
+```
+
