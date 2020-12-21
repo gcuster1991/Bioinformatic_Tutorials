@@ -1,4 +1,4 @@
-# Bioinformatic_Tutorials
+# Bioinformatic Tutorials
 Tutorials for working with amplicon sequence data in R
 
 
